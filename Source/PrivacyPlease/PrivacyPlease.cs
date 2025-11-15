@@ -18,11 +18,24 @@ namespace PrivacyPlease
     {
         public int LastUpdateTick = 0;
         public int OwnerCount = 0;
-        public Pawn[] Owners = new Pawn[2];
+        public Pawn[] Owners = new Pawn[5];
 
         public bool Allowed(Pawn pawn)
         {
-            return OwnerCount == 0 || Owners[0] == pawn || Owners[1] == pawn;
+            if (OwnerCount == 0)
+            {
+                return true;
+            }
+
+            for (int i = 0; i < OwnerCount; i++)
+            {
+                if (Owners[i] == pawn)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 
@@ -64,8 +77,11 @@ namespace PrivacyPlease
 
         private static void Recompute(Room room, RoomAccessInfo info)
         {
-            info.Owners[0] = null;
-            info.Owners[1] = null;
+            for (int i = 0; i < info.OwnerCount; i++)
+            {
+                info.Owners[i] = null;
+            }
+            
             info.OwnerCount = 0;
 
             foreach (Building_Bed bed in room.ContainedBeds)
@@ -77,7 +93,7 @@ namespace PrivacyPlease
 
                 foreach (Pawn pawn in bed.OwnersForReading)
                 {
-                    if (pawn.IsColonist && info.OwnerCount < 2)
+                    if (pawn.IsColonist && info.OwnerCount < 5)
                     {
                         info.Owners[info.OwnerCount] = pawn;
                         info.OwnerCount++;
