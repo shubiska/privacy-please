@@ -16,19 +16,19 @@ namespace PrivacyPlease
 
     public class RoomAccessInfo
     {
-        public bool IsPrivate = false;
-        public int LastUpdateTick = -99999;
-        public List<Pawn> Owners = new List<Pawn>();
+        public int LastUpdateTick = 0;
+        public int OwnerCount = 0;
+        public Pawn[] Owners = new Pawn[2];
 
         public bool Allowed(Pawn pawn)
         {
-            return !IsPrivate || Owners.Contains(pawn);
+            return OwnerCount == 0 || Owners[0] == pawn || Owners[1] == pawn;
         }
     }
 
     public static class RoomAccessCache
     {
-        private const int CACHE_INTERVAL = 30;
+        private const int CACHE_INTERVAL = 2500; // 1 in-game hour
         private static readonly Dictionary<Room, RoomAccessInfo> cache = new Dictionary<Room, RoomAccessInfo>();
 
         public static RoomAccessInfo Get(Room room)
@@ -49,24 +49,38 @@ namespace PrivacyPlease
             return info;
         }
 
+        public static void ForceRecompute(Room room)
+        {
+            int tick = Find.TickManager.TicksGame;
+            if (!cache.TryGetValue(room, out RoomAccessInfo info))
+            {
+                info = new RoomAccessInfo();
+                cache[room] = info;
+            }
+
+            info.LastUpdateTick = tick;
+            Recompute(room, info);
+        }
+
         private static void Recompute(Room room, RoomAccessInfo info)
         {
-            info.Owners.Clear();
-            info.IsPrivate = false;
+            info.Owners[0] = null;
+            info.Owners[1] = null;
+            info.OwnerCount = 0;
 
             foreach (Building_Bed bed in room.ContainedBeds)
             {
-                if (bed.Medical || bed.OwnersForReading.Capacity == 0)
+                if (bed.OwnersForReading.Capacity == 0)
                 {
                     continue;
                 }
 
                 foreach (Pawn pawn in bed.OwnersForReading)
                 {
-                    if (pawn.IsColonist)
+                    if (pawn.IsColonist && info.OwnerCount < 2)
                     {
-                        info.IsPrivate = true;
-                        info.Owners.Add(pawn);
+                        info.Owners[info.OwnerCount] = pawn;
+                        info.OwnerCount++;
                     }
                 }
             }
@@ -94,38 +108,63 @@ namespace PrivacyPlease
         }
     }
 
+    [HarmonyPatch(typeof(CompAssignableToPawn), nameof(CompAssignableToPawn.TryAssignPawn))]
+    public static class Patch_TryAssignPawn
+    {
+        static void Postfix(CompAssignableToPawn __instance)
+        {
+            if (__instance.parent is Building_Bed bed)
+            {
+                Room room = bed.GetRoom();
+                if (room == null)
+                {
+                    return;
+                }
+
+                RoomAccessCache.ForceRecompute(room);
+            }
+        }
+    }
+
     [HarmonyPatch(typeof(Region), "Allows")]
     public static class Region_AllowsPatch
     {
         static bool Prefix(Region __instance, TraverseParms tp, bool isDestination, ref bool __result)
         {
             // If the target room is not a bedroom, default behavior
-            if (__instance.Room?.Role != RoomRoleDefOf.Bedroom)
+            Room room = __instance.Room;
+            if (room == null || room.Role != RoomRoleDefOf.Bedroom)
             {
                 return true;
             }
 
-            // If the pawn is not a human, default behavior
-            if (tp.pawn?.RaceProps?.Humanlike != true)
+            Pawn pawn = tp.pawn;
+
+            // If invalid or non-human, default behavior
+            if (pawn == null || !pawn.RaceProps.Humanlike || pawn.Faction == null)
             {
                 return true;
             }
 
-            // If the pawn is hostile, default behavior
-            if (tp.pawn.HostileTo(Faction.OfPlayer))
+            // If the pawn is not a member...
+            if (pawn.Faction != Faction.OfPlayer)
             {
-                return true;
+                // If enemy, default behavior
+                if (pawn.Faction.RelationWith(Faction.OfPlayer).kind == FactionRelationKind.Hostile)
+                {
+                    return true;
+                }
+                // If friendly, prohibit
+                else
+                {
+                    __result = false;
+                    return false;
+                }
             }
 
-            // If player forced or emergency job, default behavior
-            if (RoomAccessCache.IsEmergency(tp.pawn))
-            {
-                return true;
-            }
-
-            // Prohibit pawns of going inside claimed bedrooms not owned by them
+            // Prohibit pawns of going inside claimed bedrooms not owned by them, unless there is an emergency
             RoomAccessInfo info = RoomAccessCache.Get(__instance.Room);
-            if (!info.Allowed(tp.pawn))
+            if (!info.Allowed(pawn) && !RoomAccessCache.IsEmergency(pawn))
             {
                 __result = false;
                 return false;
