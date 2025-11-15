@@ -18,11 +18,11 @@ namespace PrivacyPlease
     {
         public bool IsPrivate = false;
         public int LastUpdateTick = -99999;
-        public Pawn[] Owners = new Pawn[2];
+        public List<Pawn> Owners = new List<Pawn>();
 
         public bool Allowed(Pawn pawn)
         {
-            return !IsPrivate || pawn == Owners[0] || pawn == Owners[1];
+            return !IsPrivate || Owners.Contains(pawn);
         }
     }
 
@@ -51,9 +51,7 @@ namespace PrivacyPlease
 
         private static void Recompute(Room room, RoomAccessInfo info)
         {
-            info.Owners[0] = null;
-            info.Owners[1] = null;
-            int ownerCount = 0;
+            info.Owners.Clear();
             info.IsPrivate = false;
 
             foreach (Building_Bed bed in room.ContainedBeds)
@@ -65,11 +63,10 @@ namespace PrivacyPlease
 
                 foreach (Pawn pawn in bed.OwnersForReading)
                 {
-                    if (pawn.IsColonist && ownerCount < 2)
+                    if (pawn.IsColonist)
                     {
                         info.IsPrivate = true;
-                        info.Owners[ownerCount] = pawn;
-                        ownerCount++;
+                        info.Owners.Add(pawn);
                     }
                 }
             }
