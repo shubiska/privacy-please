@@ -1,0 +1,7 @@
+C:\Program Files (x86)\Steam\steamapps\common\RimWorld\Mods\privacy-please\1.6\Assemblies\PrivacyPlease.dll
+C:\Program Files (x86)\Steam\steamapps\common\RimWorld\Mods\privacy-please\Source\obj\Debug\PrivacyPlease.csproj.AssemblyReference.cache
+C:\Program Files (x86)\Steam\steamapps\common\RimWorld\Mods\privacy-please\Source\obj\Debug\PrivacyPlease.GeneratedMSBuildEditorConfig.editorconfig
+C:\Program Files (x86)\Steam\steamapps\common\RimWorld\Mods\privacy-please\Source\obj\Debug\PrivacyPlease.AssemblyInfoInputs.cache
+C:\Program Files (x86)\Steam\steamapps\common\RimWorld\Mods\privacy-please\Source\obj\Debug\PrivacyPlease.AssemblyInfo.cs
+C:\Program Files (x86)\Steam\steamapps\common\RimWorld\Mods\privacy-please\Source\obj\Debug\PrivacyPlease.csproj.CoreCompileInputs.cache
+C:\Program Files (x86)\Steam\steamapps\common\RimWorld\Mods\privacy-please\Source\obj\Debug\PrivacyPlease.dll

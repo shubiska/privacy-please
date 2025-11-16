@@ -41,7 +41,7 @@ namespace PrivacyPlease
 
     public static class RoomAccessCache
     {
-        private const int CACHE_INTERVAL = 2500; // 1 in-game hour
+        private const int CACHE_INTERVAL = 600; // 1 in-game hour
         private static readonly Dictionary<Room, RoomAccessInfo> cache = new Dictionary<Room, RoomAccessInfo>();
 
         public static RoomAccessInfo Get(Room room)
@@ -64,6 +64,11 @@ namespace PrivacyPlease
 
         public static void ForceRecompute(Room room)
         {
+            if (room == null)
+            {
+                return;
+            }
+
             int tick = Find.TickManager.TicksGame;
             if (!cache.TryGetValue(room, out RoomAccessInfo info))
             {
@@ -81,7 +86,7 @@ namespace PrivacyPlease
             {
                 info.Owners[i] = null;
             }
-            
+
             info.OwnerCount = 0;
 
             foreach (Building_Bed bed in room.ContainedBeds)
@@ -132,11 +137,32 @@ namespace PrivacyPlease
             if (__instance.parent is Building_Bed bed)
             {
                 Room room = bed.GetRoom();
-                if (room == null)
-                {
-                    return;
-                }
+                RoomAccessCache.ForceRecompute(room);
+            }
+        }
+    }
 
+    [HarmonyPatch(typeof(Thing), nameof(Thing.Destroy))]
+    public static class Patch_Thing_Destroy
+    {
+        static void Prefix(Thing __instance)
+        {
+            if (__instance is Building_Bed bed)
+            {
+                Room room = bed.GetRoom();
+                RoomAccessCache.ForceRecompute(room);
+            }
+        }
+    }
+
+    [HarmonyPatch(typeof(Thing), nameof(Thing.DeSpawn))]
+    public static class Patch_Thing_DeSpawn
+    {
+        static void Prefix(Thing __instance)
+        {
+            if (__instance is Building_Bed bed)
+            {
+                Room room = bed.GetRoom();
                 RoomAccessCache.ForceRecompute(room);
             }
         }
@@ -162,20 +188,10 @@ namespace PrivacyPlease
                 return true;
             }
 
-            // If the pawn is not a member...
-            if (pawn.Faction != Faction.OfPlayer)
+            // If the pawn is hostile, default behavior
+            if (pawn.Faction != Faction.OfPlayer && pawn.Faction.RelationWith(Faction.OfPlayer).kind == FactionRelationKind.Hostile)
             {
-                // If enemy, default behavior
-                if (pawn.Faction.RelationWith(Faction.OfPlayer).kind == FactionRelationKind.Hostile)
-                {
-                    return true;
-                }
-                // If friendly, prohibit
-                else
-                {
-                    __result = false;
-                    return false;
-                }
+                return true;
             }
 
             // Prohibit pawns of going inside claimed bedrooms not owned by them, unless there is an emergency
