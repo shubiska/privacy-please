@@ -173,9 +173,9 @@ namespace PrivacyPlease
     {
         static bool Prefix(Region __instance, TraverseParms tp, bool isDestination, ref bool __result)
         {
-            // If the target room is not a bedroom, default behavior
+            // If the target room is not a bedroom, or already inside it, default behavior
             Room room = __instance.Room;
-            if (room == null || room.Role != RoomRoleDefOf.Bedroom)
+            if (room == null || room.Role != RoomRoleDefOf.Bedroom || tp.pawn.GetRoom() == room)
             {
                 return true;
             }
