@@ -173,16 +173,15 @@ namespace PrivacyPlease
     {
         static bool Prefix(Region __instance, TraverseParms tp, bool isDestination, ref bool __result)
         {
-            // If the target room is not a bedroom, or already inside it, default behavior
+            // If the target room is not a bedroom, default behavior
             Room room = __instance.Room;
-            if (room == null || room.Role != RoomRoleDefOf.Bedroom || tp.pawn.GetRoom() == room)
+            if (room == null || room.Role != RoomRoleDefOf.Bedroom)
             {
                 return true;
             }
 
-            Pawn pawn = tp.pawn;
-
             // If invalid or non-human, default behavior
+            Pawn pawn = tp.pawn;
             if (pawn == null || !pawn.RaceProps.Humanlike || pawn.Faction == null)
             {
                 return true;
@@ -190,6 +189,13 @@ namespace PrivacyPlease
 
             // If the pawn is hostile, default behavior
             if (pawn.Faction != Faction.OfPlayer && pawn.Faction.RelationWith(Faction.OfPlayer).kind == FactionRelationKind.Hostile)
+            {
+                return true;
+            }
+
+            // If already inside the bedroom, default behavior
+            Room pawnRoom = pawn.GetRoom();
+            if (pawnRoom != null && pawn.GetRoom() == room)
             {
                 return true;
             }
