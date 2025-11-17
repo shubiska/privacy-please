@@ -1,7 +1,6 @@
 using Verse;
 using RimWorld;
 using HarmonyLib;
-using Verse.AI;
 using System.Collections.Generic;
 
 namespace PrivacyPlease
@@ -41,8 +40,8 @@ namespace PrivacyPlease
 
     public static class RoomAccessCache
     {
-        private const int CACHE_INTERVAL = 600; // 1 in-game hour
-        private static readonly Dictionary<Room, RoomAccessInfo> cache = new Dictionary<Room, RoomAccessInfo>();
+        private const int CACHE_INTERVAL = 600;
+        public static readonly Dictionary<Room, RoomAccessInfo> cache = new Dictionary<Room, RoomAccessInfo>();
 
         public static RoomAccessInfo Get(Room room)
         {
@@ -107,108 +106,82 @@ namespace PrivacyPlease
             }
         }
 
-        public static bool IsEmergency(Pawn pawn)
+        public static bool HasOccupant(Room room)
         {
-            if (pawn.Drafted)
+            foreach (Building_Bed bed in room.ContainedBeds)
             {
-                return true;
+                if (bed.AnyOccupants)
+                {
+                    return true;
+                }
             }
-
-            Job job = pawn.CurJob;
-            if (job == null)
-            {
-                return false;
-            }
-
-            if (job.playerForced || job.def == JobDefOf.Rescue || job.def == JobDefOf.BeatFire || job.def == JobDefOf.ExtinguishFiresNearby || job.def == JobDefOf.TendPatient)
-            {
-                return true;
-            }
-
             return false;
         }
     }
 
-    [HarmonyPatch(typeof(CompAssignableToPawn), nameof(CompAssignableToPawn.TryAssignPawn))]
-    public static class Patch_TryAssignPawn
+    public class RoomEmergencyCache
     {
-        static void Postfix(CompAssignableToPawn __instance)
+        private const int CACHE_INTERVAL = 60;
+
+        public static readonly Dictionary<Room, EmergencyInfo> cache = new Dictionary<Room, EmergencyInfo>();
+
+        public class EmergencyInfo
         {
-            if (__instance.parent is Building_Bed bed)
-            {
-                Room room = bed.GetRoom();
-                RoomAccessCache.ForceRecompute(room);
-            }
+            public int LastUpdateTick = 0;
+            public bool result = false;
         }
-    }
 
-    [HarmonyPatch(typeof(Thing), nameof(Thing.Destroy))]
-    public static class Patch_Thing_Destroy
-    {
-        static void Prefix(Thing __instance)
+        public static bool HasEmergency(Room room)
         {
-            if (__instance is Building_Bed bed)
+            int tick = Find.TickManager.TicksGame;
+            if (!cache.TryGetValue(room, out EmergencyInfo info))
             {
-                Room room = bed.GetRoom();
-                RoomAccessCache.ForceRecompute(room);
+                info = new EmergencyInfo();
+                cache[room] = info;
             }
+
+            if (tick - info.LastUpdateTick >= CACHE_INTERVAL)
+            {
+                info.LastUpdateTick = tick;
+                info.result = Recompute(room);
+            }
+
+            return info.result;
         }
-    }
 
-    [HarmonyPatch(typeof(Thing), nameof(Thing.DeSpawn))]
-    public static class Patch_Thing_DeSpawn
-    {
-        static void Prefix(Thing __instance)
+        private static bool Recompute(Room room)
         {
-            if (__instance is Building_Bed bed)
+            foreach (Building_Bed bed in room.ContainedBeds)
             {
-                Room room = bed.GetRoom();
-                RoomAccessCache.ForceRecompute(room);
-            }
-        }
-    }
-
-    [HarmonyPatch(typeof(Region), "Allows")]
-    public static class Region_AllowsPatch
-    {
-        static bool Prefix(Region __instance, TraverseParms tp, bool isDestination, ref bool __result)
-        {
-            // If the target room is not a bedroom, default behavior
-            Room room = __instance.Room;
-            if (room == null || room.Role != RoomRoleDefOf.Bedroom)
-            {
-                return true;
+                if (bed.AnyOccupants)
+                {
+                    foreach (Pawn pawn in bed.CurOccupants)
+                    {
+                        if (pawn.Downed || HealthAIUtility.ShouldBeTendedNowByPlayer(pawn) ||
+                            HealthAIUtility.ShouldEverReceiveMedicalCareFromPlayer(pawn))
+                        {
+                            return true;
+                        }
+                    }
+                }
             }
 
-            // If invalid or non-human, default behavior
-            Pawn pawn = tp.pawn;
-            if (pawn == null || !pawn.RaceProps.Humanlike || pawn.Faction == null)
+            Map map = room.Map;
+            foreach (IntVec3 cell in room.Cells)
             {
-                return true;
+                if (cell.GetFirstThing<Fire>(map) != null)
+                {
+                    return true;
+                }
+
+                Pawn pawn = cell.GetFirstPawn(map);
+                if (pawn != null && pawn.Downed)
+                {
+                    return true;
+                }
             }
 
-            // If the pawn is hostile, default behavior
-            if (pawn.Faction != Faction.OfPlayer && pawn.Faction.RelationWith(Faction.OfPlayer).kind == FactionRelationKind.Hostile)
-            {
-                return true;
-            }
-
-            // If already inside the bedroom, default behavior
-            Room pawnRoom = pawn.GetRoom();
-            if (pawnRoom != null && pawn.GetRoom() == room)
-            {
-                return true;
-            }
-
-            // Prohibit pawns of going inside claimed bedrooms not owned by them, unless there is an emergency
-            RoomAccessInfo info = RoomAccessCache.Get(__instance.Room);
-            if (!info.Allowed(pawn) && !RoomAccessCache.IsEmergency(pawn))
-            {
-                __result = false;
-                return false;
-            }
-
-            return true;
+            return false;
         }
     }
 }
