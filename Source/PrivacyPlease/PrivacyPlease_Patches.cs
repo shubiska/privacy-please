@@ -78,12 +78,6 @@ namespace PrivacyPlease
                 return;
             }
 
-            // If just walking through with no pawns sleeping, default behavior
-            if (!isDestination && !RoomAccessCache.HasOccupant(__instance.Room))
-            {
-                return;
-            }
-
             // If already inside the bedroom, default behavior
             Room pawnRoom = pawn.GetRoom();
             if (pawnRoom != null && pawnRoom == room)
@@ -91,8 +85,39 @@ namespace PrivacyPlease
                 return;
             }
 
-            // Prohibit pawns of going inside claimed bedrooms not owned by them, unless drafted or has pawn needing treatment
             RoomAccessInfo info = RoomAccessCache.Get(__instance.Room);
+
+            // If there are no owners, default behavior
+            if (info.OwnerCount == 0)
+            {
+                return;
+            }
+
+            // Messy
+            if (!isDestination)
+            {
+                if (!RoomAccessCache.HasOccupant(__instance.Room))
+                {
+                    return;
+                }
+
+                if (PrivacyPleaseMod.settings.allowPathSleeping)
+                {
+                    if (PrivacyPleaseMod.settings.allowPathSleepingFamily)
+                    {
+                        if (RoomAccessCache.HasRelativeOwner(info, pawn))
+                        {
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        return;
+                    }
+                }
+            }
+
+            // Prohibit pawns of going inside claimed bedrooms not owned by them, unless drafted or has pawn needing treatment
             if (!info.Allowed(pawn) && !pawn.Drafted && !RoomEmergencyCache.HasEmergency(__instance.Room))
             {
                 __result = false;
