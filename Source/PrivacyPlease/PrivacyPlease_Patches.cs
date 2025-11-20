@@ -1,8 +1,9 @@
 using Verse;
 using RimWorld;
 using HarmonyLib;
+using PrivacyPlease;
 
-namespace PrivacyPlease
+public static class Patch_Vanilla
 {
     [HarmonyPatch(typeof(Autosaver), nameof(Autosaver.DoAutosave))]
     public static class Autosaver_DoAutosavePatch
@@ -11,18 +12,52 @@ namespace PrivacyPlease
         {
             RoomAccessCache.cache.Clear();
             RoomEmergencyCache.cache.Clear();
+            if (Prefs.DevMode)
+            {
+                Log.Message($"[PrivacyPlease!] Autosave cleared cache.");
+            }
         }
     }
 
-    [HarmonyPatch(typeof(CompAssignableToPawn), nameof(CompAssignableToPawn.TryAssignPawn))]
-    public static class CompAssignableToPawn_TryAssignPawnPatch
+    [HarmonyPatch(typeof(Pawn_Ownership), nameof(Pawn_Ownership.ClaimBedIfNonMedical))]
+    public static class Pawn_Ownership_ClaimBedIfNonMedicalPatch
     {
-        static void Postfix(CompAssignableToPawn __instance)
+        public static void Postfix(Pawn_Ownership __instance, Building_Bed newBed)
         {
-            if (__instance.parent is Building_Bed bed)
+            if (newBed == null)
             {
-                Room room = bed.GetRoom();
-                RoomAccessCache.ForceRecompute(room);
+                return;
+            }
+
+            Room room = newBed.GetRoom();
+            RoomAccessCache.ForceRecompute(room);
+
+            if (Prefs.DevMode)
+            {
+                Pawn pawn = (Pawn)AccessTools.Field(typeof(Pawn_Ownership), "pawn").GetValue(__instance);
+                Log.Message($"[PrivacyPlease!] Pawn claimed bed: {pawn}.");
+            }
+        }
+    }
+
+    [HarmonyPatch(typeof(Pawn_Ownership), nameof(Pawn_Ownership.UnclaimBed))]
+    public static class UnclaimBed_Patch
+    {
+        public static void Postfix(Pawn_Ownership __instance)
+        {
+            Building_Bed bed = __instance.OwnedBed;
+            if (bed == null)
+            {
+                return;
+            }
+
+            Room room = bed.GetRoom();
+            RoomAccessCache.ForceRecompute(room);
+
+            if (Prefs.DevMode)
+            {
+                Pawn pawn = (Pawn)AccessTools.Field(typeof(Pawn_Ownership), "pawn").GetValue(__instance);
+                Log.Message($"[PrivacyPlease!] Pawn unclaimed bed: {pawn}.");
             }
         }
     }
@@ -36,6 +71,10 @@ namespace PrivacyPlease
             {
                 Room room = bed.GetRoom();
                 RoomAccessCache.ForceRecompute(room);
+                if (Prefs.DevMode)
+                {
+                    Log.Message($"[PrivacyPlease!] Bed destroyed, ownership updated.");
+                }
             }
         }
     }
@@ -49,82 +88,62 @@ namespace PrivacyPlease
             {
                 Room room = bed.GetRoom();
                 RoomAccessCache.ForceRecompute(room);
+                if (Prefs.DevMode)
+                {
+                    Log.Message($"[PrivacyPlease!] Bed despawned, ownership updated.");
+                }
             }
         }
     }
 
+    // Block going directly inside a bedroom
     [HarmonyPatch(typeof(Region), nameof(Region.Allows))]
     public static class Region_AllowsPatch
     {
-        static void Postfix(Region __instance, TraverseParms tp, bool isDestination, ref bool __result)
+        static bool Prefix(Region __instance, TraverseParms tp, bool isDestination, ref bool __result)
         {
-            // If the target room is not a bedroom, default behavior
+            // If the target room is not a room, default behavior
             Room room = __instance.Room;
-            if (!__result || room == null || room.Role != RoomRoleDefOf.Bedroom)
+            if (room == null)
             {
-                return;
+                return true;
+            }
+
+            // If the target is not a bedrooma and not a guest bedroom(hospitality), default behavior
+            if (room.Role != RoomRoleDefOf.Bedroom && !(PrivacyPleaseMod.hospitality && room.Role.defName == "GuestRoom"))
+            {
+                return true;
             }
 
             // If invalid or non-human, default behavior
             Pawn pawn = tp.pawn;
             if (pawn == null || !pawn.RaceProps.Humanlike || pawn.Faction == null)
             {
-                return;
+                return true;
             }
 
             // If the pawn is hostile, default behavior
             if (pawn.Faction != Faction.OfPlayer && pawn.Faction.RelationWith(Faction.OfPlayer).kind == FactionRelationKind.Hostile)
             {
-                return;
+                return true;
             }
 
-            // If already inside the bedroom, default behavior
-            Room pawnRoom = pawn.GetRoom();
-            if (pawnRoom != null && pawnRoom == room)
-            {
-                return;
-            }
-
-            RoomAccessInfo info = RoomAccessCache.Get(__instance.Room);
+            RoomAccessInfo info = RoomAccessCache.Get(room);
 
             // If there are no owners, default behavior
             if (info.OwnerCount == 0)
             {
-                return;
-            }
-
-            // Messy
-            if (!isDestination)
-            {
-                if (!RoomAccessCache.HasOccupant(__instance.Room))
-                {
-                    return;
-                }
-
-                if (PrivacyPleaseMod.settings.allowPathSleeping)
-                {
-                    if (PrivacyPleaseMod.settings.allowPathSleepingFamily)
-                    {
-                        if (RoomAccessCache.HasRelativeOwner(info, pawn))
-                        {
-                            return;
-                        }
-                    }
-                    else
-                    {
-                        return;
-                    }
-                }
+                return true;
             }
 
             // Prohibit pawns of going inside claimed bedrooms not owned by them, unless drafted or has pawn needing treatment
-            if (!info.Allowed(pawn) && !pawn.Drafted && !RoomEmergencyCache.HasEmergency(__instance.Room))
+            if (!info.Allowed(pawn) && !pawn.Drafted && !RoomEmergencyCache.HasEmergency(room))
             {
                 __result = false;
-                return;
+                return false;
             }
 
-            __result = true;
+            return true;
         }
     }
 }

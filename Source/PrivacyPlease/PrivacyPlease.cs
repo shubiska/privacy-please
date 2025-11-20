@@ -1,59 +1,34 @@
 using Verse;
 using HarmonyLib;
-using UnityEngine;
+using System.Reflection;
 
 namespace PrivacyPlease
 {
     public class PrivacyPleaseMod : Mod
     {
-        public static PrivacyPleaseSettings settings;
+        public static bool hospitality;
 
         public PrivacyPleaseMod(ModContentPack content) : base(content)
         {
-            settings = GetSettings<PrivacyPleaseSettings>();
-            new Harmony("Xubisca.PrivacyPlease").PatchAll();
-        }
+            hospitality = ModLister.GetModWithIdentifier("Orion.Hospitality", false) != null;
+            var harmony = new Harmony("Xubisca.PrivacyPlease");
 
-        public override string SettingsCategory() => "Privacy Please!";
+            harmony.PatchAll(typeof(Patch_Vanilla).Assembly);
 
-        public override void DoSettingsWindowContents(Rect inRect)
-        {
-            Listing_Standard listing = new Listing_Standard();
-            listing.Begin(inRect);
-
-            listing.CheckboxLabeled("Allow path even if someone is sleeping inside", ref settings.allowPathSleeping);
-            if (settings.allowPathSleeping)
+            if (hospitality)
             {
-                listing.CheckboxLabeled("Allow path while sleeping only for family", ref settings.allowPathSleepingFamily);
+                PatchHospitality(harmony);
             }
-
-            if (RoomAccessCache.dirty)
-            {
-                RoomAccessCache.dirty = true;
-                RoomAccessCache.cache.Clear();
-            }
-
-            listing.End();
-            base.DoSettingsWindowContents(inRect);
         }
 
-        public override void WriteSettings()
+        public void PatchHospitality(Harmony harmony)
         {
-            base.WriteSettings();
-            RoomAccessCache.cache.Clear();
-        }
-    }
+            var type = AccessTools.TypeByName("Hospitality.CompGuest");
+            var method = AccessTools.Method(type, "ClaimBed");
 
-    public class PrivacyPleaseSettings : ModSettings
-    {
-        public bool allowPathSleeping = false;
-        public bool allowPathSleepingFamily = false;
+            var postfix = typeof(JobDriver_ClaimBed_ClaimBedPatch_Hospitality).GetMethod("Postfix", BindingFlags.Static | BindingFlags.Public);
 
-        public override void ExposeData()
-        {
-            Scribe_Values.Look(ref allowPathSleeping, "allowPathSleeping", false);
-            Scribe_Values.Look(ref allowPathSleepingFamily, "allowPathSleepingFamily", false);
-            base.ExposeData();
+            harmony.Patch(method, postfix: new HarmonyMethod(postfix));
         }
     }
 }

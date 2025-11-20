@@ -33,7 +33,7 @@ namespace PrivacyPlease
     public static class RoomAccessCache
     {
         public static bool dirty = false;
-        private const int CACHE_INTERVAL = 1200;
+        private const int CACHE_INTERVAL = 600;
         public static readonly Dictionary<Room, RoomAccessInfo> cache = new Dictionary<Room, RoomAccessInfo>();
 
         public static RoomAccessInfo Get(Room room)
@@ -173,7 +173,7 @@ namespace PrivacyPlease
                 }
 
                 Pawn pawn = cell.GetFirstPawn(map);
-                if (pawn != null && pawn.Downed)
+                if (pawn != null && pawn.Downed && HealthAIUtility.ShouldBeTendedNowByPlayer(pawn))
                 {
                     return true;
                 }
