@@ -85,7 +85,7 @@ namespace PrivacyPlease
             {
                 foreach (Pawn pawn in bed.OwnersForReading)
                 {
-                    if (pawn.Faction == Faction.OfPlayer && info.OwnerCount < 5)
+                    if (!pawn.IsSlave && !pawn.IsPrisoner && info.OwnerCount < 5)
                     {
                         info.Owners[info.OwnerCount] = pawn;
                         info.OwnerCount++;
