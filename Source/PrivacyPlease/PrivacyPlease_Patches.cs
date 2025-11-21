@@ -102,6 +102,12 @@ public static class Patch_Vanilla
     {
         static bool Prefix(Region __instance, TraverseParms tp, bool isDestination, ref bool __result)
         {
+            // Allow passing by
+            if (!isDestination)
+            {
+                return true;
+            }
+
             // If the target room is not a room, default behavior
             Room room = __instance.Room;
             if (room == null)
