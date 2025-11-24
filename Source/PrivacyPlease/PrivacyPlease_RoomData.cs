@@ -81,8 +81,18 @@ namespace PrivacyPlease
                 info.Owners[i] = null;
             }
 
+            if (PrivacyPleaseMod.hospitality && room.Role.defName == "GuestRoom" && room.ContainedBeds.Count() > 1)
+            {
+                return;
+            }
+
             foreach (Building_Bed bed in room.ContainedBeds)
             {
+                if (bed.def.building?.bed_crib == true)
+                {
+                    continue;
+                }
+
                 foreach (Pawn pawn in bed.OwnersForReading)
                 {
                     if (!pawn.IsSlave && !pawn.IsPrisoner && info.OwnerCount < 5)
@@ -92,32 +102,6 @@ namespace PrivacyPlease
                     }
                 }
             }
-        }
-
-        public static bool HasOccupant(Room room)
-        {
-            foreach (Building_Bed bed in room.ContainedBeds)
-            {
-                if (bed.AnyOccupants)
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-
-        public static bool HasRelativeOwner(RoomAccessInfo info, Pawn pawn)
-        {
-            foreach (Pawn owner in info.Owners)
-            {
-                if (owner.relations.FamilyByBlood.Contains(pawn))
-                {
-                    return true;
-                }
-            }
-
-            return false;
         }
     }
 

@@ -1,5 +1,6 @@
 using Verse;
 using HarmonyLib;
+using RimWorld;
 
 namespace PrivacyPlease
 {
@@ -15,6 +16,11 @@ namespace PrivacyPlease
             {
                 return;
             }
+
+            Building_Bed _bed = newBed as Building_Bed;
+
+            Room room = _bed.GetRoom();
+            RoomAccessCache.ForceRecompute(room);
 
             if (Prefs.DevMode)
             {
